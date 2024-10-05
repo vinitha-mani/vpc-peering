@@ -1,0 +1,151 @@
+# AWS VPC Peering Setup Guide
+## Connecting North Virginia (Public EC2) to Oregon (Private EC2)
+
+### Prerequisites
+- AWS Account with access to both regions
+- Existing VPCs in both regions
+- EC2 instances (or planning to create them)
+
+### 1. Initial VPC Setup in North Virginia (us-east-1)
+
+1. Create or verify VPC in North Virginia:
+   - Navigate to VPC Dashboard
+   - VPC CIDR block: 10.0.0.0/16 (example)
+   - Enable DNS hostnames
+   - Enable DNS resolution
+
+2. Create public subnet:
+   - CIDR block: 10.0.1.0/24
+   - Enable auto-assign public IPv4
+   - Attach to availability zone
+
+3. Create Internet Gateway:
+   - Create new Internet Gateway
+   - Attach to North Virginia VPC
+
+4. Configure Route Table for public subnet:
+   - Create new route table
+   - Add route: 0.0.0.0/0 → Internet Gateway
+   - Associate with public subnet
+
+### 2. VPC Setup in Oregon (us-west-2)
+
+1. Create or verify VPC in Oregon:
+   - VPC CIDR block: 172.16.0.0/16 (example)
+   - Enable DNS hostnames
+   - Enable DNS resolution
+
+2. Create private subnet:
+   - CIDR block: 172.16.1.0/24
+   - Disable auto-assign public IPv4
+   - Attach to availability zone
+
+3. Configure Route Table for private subnet:
+   - Create new route table
+   - Associate with private subnet
+
+### 3. Create VPC Peering Connection
+
+1. In North Virginia region:
+   - Go to VPC Dashboard → Peering Connections
+   - Click "Create Peering Connection"
+   - Name: NVA-OR-Peering (example)
+   - Select local VPC (Requester)
+   - For peer VPC:
+     - Select "Another region"
+     - Choose "US West (Oregon)"
+     - Enter Oregon VPC ID
+   - Click "Create Peering Connection"
+
+2. Accept Peering Request:
+   - Switch to Oregon region
+   - Go to VPC Peering Connections
+   - Select pending request
+   - Click "Accept Request"
+   - Click "Accept"
+
+### 4. Update Route Tables
+
+1. In North Virginia VPC:
+   - Select route table for public subnet
+   - Add route:
+     - Destination: 172.16.0.0/16 (Oregon VPC CIDR)
+     - Target: VPC Peering Connection
+
+2. In Oregon VPC:
+   - Select route table for private subnet
+   - Add route:
+     - Destination: 10.0.0.0/16 (N. Virginia VPC CIDR)
+     - Target: VPC Peering Connection
+
+### 5. Security Group Configuration
+
+1. North Virginia EC2 Security Group:
+   - Inbound Rules:
+     - Allow SSH (22) from your IP
+     - Allow all traffic from Oregon VPC CIDR (172.16.0.0/16)
+   - Outbound Rules:
+     - Allow all traffic
+
+2. Oregon EC2 Security Group:
+   - Inbound Rules:
+     - Allow all traffic from N. Virginia VPC CIDR (10.0.0.0/16)
+   - Outbound Rules:
+     - Allow all traffic
+
+### 6. Launch EC2 Instances
+
+1. Launch EC2 in North Virginia:
+   - Choose Amazon Linux 2
+   - Select public subnet
+   - Enable auto-assign public IP
+   - Attach security group
+   - Create/select key pair
+
+2. Launch EC2 in Oregon:
+   - Choose Amazon Linux 2
+   - Select private subnet
+   - Disable auto-assign public IP
+   - Attach security group
+   - Create/select key pair
+
+### 7. Testing Connectivity
+
+1. SSH into North Virginia EC2:
+   ```bash
+   ssh -i key.pem ec2-user@<public-ip>
+   ```
+
+2. From North Virginia EC2, ping Oregon EC2:
+   ```bash
+   ping <oregon-ec2-private-ip>
+   ```
+
+### Troubleshooting Tips
+
+1. If ping fails, verify:
+   - Route tables are properly configured
+   - Security groups allow traffic
+   - ICMP is allowed in security groups
+   - VPC peering status is "Active"
+
+2. Common issues:
+   - Overlapping CIDR blocks
+   - Missing route table entries
+   - Security group restrictions
+   - Network ACL restrictions
+
+### Cleanup (When Needed)
+
+1. Delete VPC peering connection
+2. Remove route table entries
+3. Update security groups
+4. Terminate EC2 instances if no longer needed
+
+### Best Practices
+
+1. Use different, non-overlapping CIDR blocks
+2. Document IP ranges and peering connection details
+3. Use meaningful tags for all resources
+4. Regularly review and audit security group rules
+5. Monitor VPC peering connection metrics
